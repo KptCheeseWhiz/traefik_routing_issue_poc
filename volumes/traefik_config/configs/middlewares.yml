@@ -1,0 +1,23 @@
+http:
+  middlewares:
+    security-headers:
+      headers:
+        referrerPolicy: "same-origin"
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        stsSeconds: 31536000
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customResponseHeaders:
+          server: "xxxx"
+          x-powered-by: ""
+          x-robots-tag: "none"
+
+    rate-limiting:
+      rateLimit:
+        average: 10
+        period: 1
+        burst: 250

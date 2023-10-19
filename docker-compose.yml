@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    hostname: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      external:
+      traefik:
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./volumes/traefik_config:/etc/traefik
+      - ./volumes/traefik_data:/data
+    labels:
+      traefik.enable: true
+      traefik.http.routers.traefik.rule: Host(`traefik.example.com`)
+      traefik.http.routers.traefik.service: api@internal
+      traefik.http.routers.traefik.entrypoints: https
+
+  httpservice:
+    build:
+      context: ./build/webserver
+    container_name: httpservice
+    hostname: httpservice
+    command: ["80"]
+    restart: unless-stopped
+    networks:
+      traefik:
+    expose:
+      - 80
+    environment:
+      TZ: ${TZ:-UTC}
+    labels:
+      traefik.enable: true
+      traefik.http.services.httpservice.loadbalancer.server.port: 80
+
+      traefik.http.routers.catchall.rule: "HostRegexp(`{x:.+}.example.com`) || Host(`example.com`)"
+      traefik.http.routers.catchall.priority: 1
+      traefik.http.routers.catchall.middlewares: catchall-redirect-www@docker
+      traefik.http.routers.catchall.entrypoints: https
+
+      traefik.http.middlewares.catchall-redirect-www.redirectregex.regex: ^https?://example.com/(.*)
+      traefik.http.middlewares.catchall-redirect-www.redirectregex.replacement: https://www.example.com/$${1}
+      traefik.http.middlewares.catchall-redirect-www.redirectregex.permanent: true
+
+      traefik.http.routers.httpservice.rule: "Host(`www.example.com`)"
+      traefik.http.routers.httpservice.entrypoints: https
+
+  tcpservice:
+    build:
+      context: ./build/webserver
+    container_name: tcpservice
+    hostname: tcpservice
+    command: ["-s", "443"]
+    restart: unless-stopped
+    networks:
+      traefik:
+    expose:
+      - 443
+    environment:
+      TZ: ${TZ:-UTC}
+    labels:
+      traefik.enable: true
+
+      traefik.tcp.services.tcpservice.loadbalancer.server.port: 443
+      traefik.tcp.services.tcpservice.loadbalancer.terminationdelay: 10000
+      traefik.tcp.routers.tcpservice.rule: ClientIP(`0.0.0.0/0`)
+      traefik.tcp.routers.tcpservice.priority: 1
+      traefik.tcp.routers.tcpservice.tls.passthrough: true
+      traefik.tcp.routers.tcpservice.tls.options: weaknosni@file
+      traefik.tcp.routers.tcpservice.entrypoints: https
+
+networks:
+  external:
+    name: external
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.253.0/24
+          gateway: 172.31.253.1
+    driver_opts:
+      com.docker.network.bridge.name: br-external
+
+  traefik:
+    name: traefik
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.254.0/24
+          gateway: 172.31.254.1
+    driver_opts:
+      com.docker.network.bridge.name: br-traefik

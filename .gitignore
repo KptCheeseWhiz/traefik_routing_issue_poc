@@ -1,0 +1,2 @@
+/volumes/traefik_data/*.crt
+/volumes/traefik_data/*.key
